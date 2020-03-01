@@ -2,35 +2,6 @@
 #import <AVFoundation/AVFoundation.h>
 #import <libkern/OSAtomic.h>
 
-@interface MyAlertViewDelegate : NSObject<UIAlertViewDelegate>
-
-typedef void (^AlertViewCompletionBlock)(NSInteger buttonIndex);
-@property (strong,nonatomic) AlertViewCompletionBlock callback;
-
-+ (void)showAlertView:(UIAlertView *)alertView withCallback:(AlertViewCompletionBlock)callback;
-
-@end
-
-@implementation MyAlertViewDelegate
-@synthesize callback;
-
-- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
-     callback(buttonIndex);
-}
-
-+ (void)showAlertView:(UIAlertView *)alertView withCallback:(AlertViewCompletionBlock)callback {
-     __block MyAlertViewDelegate *delegate = [[MyAlertViewDelegate alloc] init];
-     alertView.delegate = delegate;
-     delegate.callback = ^(NSInteger buttonIndex) {
-         callback(buttonIndex);
-         alertView.delegate = nil;
-         delegate = nil;
-     };
-     [alertView show];
- }
-
-@end
-
 @interface NSError (FlutterError)
 @property(readonly, nonatomic) FlutterError *flutterError;
 @end
@@ -64,7 +35,6 @@ AVCaptureMetadataOutputObjectsDelegate>
 @property(assign, nonatomic) BOOL isScanning;
 @property(strong, nonatomic) FlutterMethodChannel *channel;
 @property(strong, nonatomic) NSArray *codeFormats;
-@property(nonatomic, assign) BOOL torchIsOn;
 
 - (instancetype)initWithCameraName:(NSString *)cameraName
                   resolutionPreset:(NSString *)resolutionPreset
@@ -94,7 +64,6 @@ AVCaptureMetadataOutputObjectsDelegate>
                  resolutionPreset);
         preset = AVCaptureSessionPresetLow;
     }
-    _torchIsOn = NO;
     _captureSession.sessionPreset = preset;
     _captureDevice = [AVCaptureDevice deviceWithUniqueID:cameraName];
     NSError *localError = nil;
@@ -195,23 +164,6 @@ AVCaptureMetadataOutputObjectsDelegate>
 
 - (void)stopScanning:(FlutterResult)result {
     _isScanning = false;
-}
-
-- (void)toggleFlash:(FlutterResult)result {
-    if ([_captureDevice hasTorch] && [_captureDevice hasFlash]){
-
-        [_captureDevice lockForConfiguration:nil];
-        if (_torchIsOn == NO) {
-            [_captureDevice setTorchMode:AVCaptureTorchModeOn];
-            [_captureDevice setFlashMode:AVCaptureFlashModeOn];
-            _torchIsOn = YES;
-        } else {
-            [_captureDevice setTorchMode:AVCaptureTorchModeOff];
-            [_captureDevice setFlashMode:AVCaptureFlashModeOff];
-            _torchIsOn = NO;            
-        }
-        [_captureDevice unlockForConfiguration];
-    }
 }
 
 - (void)startScanning:(FlutterResult)result {
@@ -386,39 +338,6 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
                      });
             [cam start];
         }
-    } else if ([@"checkPermission" isEqualToString:call.method]) {
-        AVAuthorizationStatus authStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
-        if (authStatus == AVAuthorizationStatusAuthorized) {
-            result(@"granted");
-        }
-        else if (authStatus == AVAuthorizationStatusDenied) {
-            result(@"denied");
-        }
-        else if (authStatus == AVAuthorizationStatusRestricted) {
-            result(@"restricted");
-        }
-        else if (authStatus == AVAuthorizationStatusNotDetermined) {
-            result(@"unknown");
-        }
-    } else if ([@"settings" isEqualToString:call.method]){
-        [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]];
-        result(nil);
-    } else if ([@"requestPermission" isEqualToString:call.method]) {
-        AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
-        if(status == AVAuthorizationStatusDenied){ // denied
-            result(@"alreadyDenied");
-        }
-        else if (status == AVAuthorizationStatusNotDetermined){ // not determined
-            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
-                if (granted) {
-                    result(@"granted");
-                } else {
-                    result(@"denied");
-                }
-            }];
-        } else {
-            result(@"unknown");
-        }
     } else {
         NSDictionary *argsMap = call.arguments;
         NSUInteger textureId = ((NSNumber *)argsMap[@"textureId"]).unsignedIntegerValue;
@@ -431,8 +350,6 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             [_camera startScanning:result];
         } else if ([@"stopScanning" isEqualToString:call.method]) {
             [_camera stopScanning:result];
-        } else if ([@"toggleFlash" isEqualToString:call.method]) {
-            [_camera toggleFlash:result];
         } else {
             result(FlutterMethodNotImplemented);
         }
